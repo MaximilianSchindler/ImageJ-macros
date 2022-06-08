@@ -1,0 +1,548 @@
+setBatchMode(true);
+//definitions
+run("Select None");
+
+//directory for excel file location
+savedir = getDirectory("Select the Directory for all Files");
+
+showMessage("Be sure to chose the correct order for image folders in the following instructions. Correct order:\n \n 1. vessel t24 \n 2. vessel t48 \n 3. glom t24 \n 4. glom t48");
+
+//directory for vessel t24
+dir1 = getDirectory("Images vessel t24");
+
+
+//directory for vessel t48
+dir2 = getDirectory("Images vessel t48");
+
+
+//directory for glom t24
+dir3 = getDirectory("Images glom t24");
+
+//directory for glom t48
+dir4 = getDirectory("Images glom t48");
+
+//directory excel table
+filename = getDirectory("Select the file name");
+name2 = File.getNameWithoutExtension(filename);
+
+//create directories for segmentation masks
+File.makeDirectory(savedir+"Segmentation masks t24");
+File.makeDirectory(savedir+"Segmentation masks t48");
+
+//open image folder vessel t24
+open(dir1);
+print("Failed segmentation vessel t24")
+print("");
+n=nSlices;
+
+//Loop
+for (i = 0; i < n; i++) {
+
+//Count slices
+Stack.getDimensions(width, height, channels, slices, frames);
+if (slices>11) {
+	
+//Prepare renaming for results table
+slicename = getInfo("slice.label");
+wellname = substring(slicename,1, 5);
+
+//Split into substacks
+run("Make Substack...", "delete slices=1-11");
+selectWindow("Substack (1-11)");
+run("Make Substack...", "delete slices=1");
+selectWindow("Substack (1-11)");
+run("Duplicate...", "title=Segmentation duplicate");
+
+//BG Substraction of BF Movie
+run("Duplicate...", "title=TEMP duplicate");
+run("Gaussian Blur...", "sigma=150 stack");
+run("Calculator Plus", "i1=Segmentation i2=TEMP operation=[Divide: i2 = (i1/i2) x k1 + k2] k1=15000 k2=0 create");
+selectWindow("TEMP");
+close();
+
+//1st Blurr
+
+run("Gaussian Blur...", "sigma=4 stack");
+//Pixel change
+run("Z Project...", "projection=[Standard Deviation]");
+
+//Blurr ZProject
+run("Gaussian Blur...", "sigma=5 stack");
+
+//8-bit
+run("8-bit");
+
+//Thresholding
+run("Auto Local Threshold", "method=Phansalkar radius=15 parameter_1=0 parameter_2=0 white");
+run("Convert to Mask");
+run("Watershed");
+
+//Analyze particles
+run("Analyze Particles...", "size=400-Infinity add");
+saveAs("Jpeg", savedir+"\\Segmentation masks t24\\"+wellname);
+close("Result");
+selectWindow("Substack (1)");
+
+//Rename for results
+rename(wellname);
+
+//No ROI has been found
+if (roiManager("Count") == 0){
+print(wellname);
+close("Segmentation");
+close(wellname);
+close("Substack (1-11)");
+close("STD_Result");
+continue
+}
+//Measurement for one ROI
+if (roiManager("count") == 1) {
+roiManager("Select", 0);
+run("Set Measurements...", "area mean min bounding display redirect=None decimal=0");
+run("Measure");
+rename("To be closed");
+h=getValue("Height");
+if (h>900) {
+print(wellname);
+}
+}
+//Measurement for multiple ROIs
+else {
+roiManager("combine");
+run("Set Measurements...", "area mean min bounding display redirect=None decimal=0");
+run("Measure");
+rename("To be closed");
+h=getValue("Height");
+if (h>900) {
+print(wellname);
+}
+}
+//Clean-up
+roiManager("delete");
+close("Segmentation");
+close(wellname);
+close("Substack (1-11)");
+close("STD_Result");
+close("To be closed");
+}
+
+//Last 11 slices
+else {
+//Prepare renaming for results table
+slicename = getInfo("slice.label");
+wellname = substring(slicename,1, 5);
+
+//Split into substacks
+rename("last11");
+selectWindow("last11");
+run("Make Substack...", "delete slices=1");
+selectWindow("last11");
+run("Duplicate...", "title=Segmentation duplicate");
+
+//BG Substraction of BF Movie
+run("Duplicate...", "title=TEMP duplicate");
+run("Gaussian Blur...", "sigma=150 stack");
+run("Calculator Plus", "i1=Segmentation i2=TEMP operation=[Divide: i2 = (i1/i2) x k1 + k2] k1=15000 k2=0 create");
+selectWindow("TEMP");
+close();
+
+//1st Blurr
+run("Gaussian Blur...", "sigma=4 stack");
+
+//Pixel change
+run("Z Project...", "projection=[Standard Deviation]");
+
+//Blurr ZProject
+run("Gaussian Blur...", "sigma=5 stack");
+
+//8-bit
+run("8-bit");
+
+//Thresholding
+run("Auto Local Threshold", "method=Phansalkar radius=15 parameter_1=0 parameter_2=0 white");
+run("Convert to Mask");
+run("Watershed");
+
+//Analyze particles
+run("Analyze Particles...", "size=400-Infinity add");
+saveAs("Jpeg", savedir+"\\Segmentation masks t24\\"+wellname);
+close("Result");
+selectWindow("Substack (1)");
+
+//Rename for results
+rename(wellname);
+
+//No ROI has been found
+if (roiManager("Count") == 0){
+print(wellname);
+close("Segmentation");
+close(wellname);
+close("Substack (1-11)");
+close("last11");
+print("Done!");
+break
+}
+////Measurement for one ROI
+if (roiManager("count") == 1) {
+roiManager("Select", 0);
+run("Set Measurements...", "area mean min bounding display redirect=None decimal=0");
+run("Measure");
+rename("To be closed");
+h=getValue("Height");
+if (h>900) {
+print(wellname); 
+}
+}
+//Measurement for multiple ROIs	
+else {
+roiManager("combine");
+run("Set Measurements...", "area mean min bounding display redirect=None decimal=0");
+run("Measure");
+h=getValue("Height");
+if (h>900) {
+print(wellname);
+}
+
+run("Set Measurements...", "area mean min display redirect=None decimal=0");
+
+//Save results
+outputDir = savedir+name2+".xlsx";
+run("Read and Write Excel", "no_count_column file=["+outputDir+"] sheet=Vessel dataset_label=[t24]");
+
+}
+//Clean-up last 11
+close("Segmentation");
+close("last11");
+close("STD_Result");
+roiManager("delete");
+close("To be closed");
+close(wellname);
+if (isOpen("Results")) {
+selectWindow("Results"); 
+run("Close");
+}
+if (isOpen("ROI Manager")) {
+selectWindow("ROI Manager");
+run("Close");
+}
+break
+}
+}
+
+//start analysis t48
+
+//open image folder vessel t48
+open(dir2);
+print("");
+print("Failed segmentation vessel t48");
+print("");
+n=nSlices;
+
+//Loop
+for (i = 0; i < n; i++) {
+
+//Count slices
+Stack.getDimensions(width, height, channels, slices, frames);
+if (slices>11) {
+	
+//Prepare renaming for results table
+slicename = getInfo("slice.label");
+wellname = substring(slicename,1, 5);
+
+//Split into substacks
+run("Make Substack...", "delete slices=1-11");
+selectWindow("Substack (1-11)");
+run("Make Substack...", "delete slices=1");
+selectWindow("Substack (1-11)");
+run("Duplicate...", "title=Segmentation duplicate");
+
+//BG Substraction of BF Movie
+run("Duplicate...", "title=TEMP duplicate");
+run("Gaussian Blur...", "sigma=150 stack");
+run("Calculator Plus", "i1=Segmentation i2=TEMP operation=[Divide: i2 = (i1/i2) x k1 + k2] k1=15000 k2=0 create");
+selectWindow("TEMP");
+close();
+
+//1st Blurr
+
+run("Gaussian Blur...", "sigma=4 stack");
+//Pixel change
+run("Z Project...", "projection=[Standard Deviation]");
+
+//Blurr ZProject
+run("Gaussian Blur...", "sigma=5 stack");
+
+//8-bit
+run("8-bit");
+
+//Thresholding
+run("Auto Local Threshold", "method=Phansalkar radius=15 parameter_1=0 parameter_2=0 white");
+run("Convert to Mask");
+run("Watershed");
+
+//Analyze particles
+run("Analyze Particles...", "size=400-Infinity add");
+saveAs("Jpeg", savedir+"\\Segmentation masks t48\\"+wellname);
+close("Result");
+selectWindow("Substack (1)");
+
+//Rename for results
+rename(wellname);
+
+//No ROI has been found
+if (roiManager("Count") == 0){
+print(wellname);
+close("Segmentation");
+close(wellname);
+close("Substack (1-11)");
+close("STD_Result");
+continue
+}
+//Measurement for one ROI
+if (roiManager("count") == 1) {
+roiManager("Select", 0);
+run("Set Measurements...", "area mean min bounding display redirect=None decimal=0");
+run("Measure");
+rename("To be closed");
+h=getValue("Height");
+if (h>900) {
+print(wellname);
+}
+}
+//Measurement for multiple ROIs
+else {
+roiManager("combine");
+run("Set Measurements...", "area mean min bounding display redirect=None decimal=0");
+run("Measure");
+rename("To be closed");
+h=getValue("Height");
+if (h>900) {
+print(wellname);
+}
+}
+//Clean-up
+roiManager("delete");
+close("Segmentation");
+close(wellname);
+close("Substack (1-11)");
+close("STD_Result");
+close("To be closed");
+}
+
+//Last 11 slices
+else {
+//Prepare renaming for results table
+slicename = getInfo("slice.label");
+wellname = substring(slicename,1, 5);
+
+//Split into substacks
+rename("last11");
+selectWindow("last11");
+run("Make Substack...", "delete slices=1");
+selectWindow("last11");
+run("Duplicate...", "title=Segmentation duplicate");
+
+//BG Substraction of BF Movie
+run("Duplicate...", "title=TEMP duplicate");
+run("Gaussian Blur...", "sigma=150 stack");
+run("Calculator Plus", "i1=Segmentation i2=TEMP operation=[Divide: i2 = (i1/i2) x k1 + k2] k1=15000 k2=0 create");
+selectWindow("TEMP");
+close();
+
+//1st Blurr
+run("Gaussian Blur...", "sigma=4 stack");
+
+//Pixel change
+run("Z Project...", "projection=[Standard Deviation]");
+
+//Blurr ZProject
+run("Gaussian Blur...", "sigma=5 stack");
+
+//8-bit
+run("8-bit");
+
+//Thresholding
+run("Auto Local Threshold", "method=Phansalkar radius=15 parameter_1=0 parameter_2=0 white");
+run("Convert to Mask");
+run("Watershed");
+
+//Analyze particles
+run("Analyze Particles...", "size=400-Infinity add");
+saveAs("Jpeg", savedir+"\\Segmentation masks t48\\"+wellname);
+close("Result");
+selectWindow("Substack (1)");
+
+//Rename for results
+rename(wellname);
+
+//No ROI has been found
+if (roiManager("Count") == 0){
+print(wellname);
+close("Segmentation");
+close(wellname);
+close("Substack (1-11)");
+close("last11");
+print("Done!");
+break
+}
+////Measurement for one ROI
+if (roiManager("count") == 1) {
+roiManager("Select", 0);
+run("Set Measurements...", "area mean min bounding display redirect=None decimal=0");
+run("Measure");
+rename("To be closed");
+h=getValue("Height");
+if (h>900) {
+print(wellname);
+}
+}
+//Measurement for multiple ROIs	
+else {
+roiManager("combine");
+run("Set Measurements...", "area mean min bounding display redirect=None decimal=0");
+run("Measure");
+h=getValue("Height");
+if (h>900) {
+print(wellname);
+}
+
+run("Set Measurements...", "area mean min display redirect=None decimal=0");
+
+//Save results
+outputDir = savedir+name2+".xlsx";
+run("Read and Write Excel", "no_count_column file=["+outputDir+"] sheet=Vessel dataset_label=[t48]");
+
+//create column for Ratios
+Table.create("Results");
+run("Read and Write Excel", "no_count_column file=["+outputDir+"] sheet=Vessel dataset_label=[Ratios]");
+close("Results");
+}
+
+//Clean-up last 11
+close("Segmentation");
+close("last11");
+close("STD_Result");
+roiManager("delete");
+close("To be closed");
+close(wellname);
+if (isOpen("Results")) {
+selectWindow("Results"); 
+run("Close");
+}
+if (isOpen("ROI Manager")) {
+selectWindow("ROI Manager");
+run("Close");
+}
+break
+}
+}
+
+//Start analysis glom fluorecence
+
+//open image folder glom t24 and set measurements
+setBatchMode(false);
+open(dir3);
+print("");
+print("mCherry negative at t24")
+print("");
+
+for (i = 0; i < nSlices; i++) {
+	name = getMetadata("Label");
+	well = substring(name, 1,5);
+	Property.setSliceLabel(well, i+1);
+	run("Next Slice [>]");
+}	
+
+//find center of mass
+run("Center Of Mass", "image_type=Fluo threshold_method=Otsu width=256 height=256 offset_x=0 offset_y=0 calculation=slice-by-slice");
+run("Clear Results");
+
+
+//measure center of mass
+run("Set Measurements...", "area mean min center display redirect=None decimal=0");
+roiManager("Measure");
+
+for (i=0; i < nResults(); i++){
+Label = getResultLabel(i);
+labelArray = split (Label, ":");
+setResult("Label", i, labelArray[2]);
+}
+
+outputDir = savedir+name2+".xlsx";
+run("Read and Write Excel", "no_count_column file=["+outputDir+"] sheet=Glom dataset_label=[t24]");
+
+if (isOpen("ROI Manager")) {
+selectWindow("ROI Manager");
+run("Close");
+}
+close("*");
+
+//print labels
+Table.applyMacro("if (Max<1000){ labelArray = split (Label, \":\"); print (labelArray[0]); } ");
+
+selectWindow("Log");
+saveAs("Text", savedir+"Wells to be excluded");
+
+if (isOpen("Results")) {
+selectWindow("Results"); 
+run("Close");
+}
+if (isOpen("ROI Manager")) {
+selectWindow("ROI Manager");
+run("Close");
+}
+if (isOpen("Log")) {
+selectWindow("Log");
+run("Close");
+}
+open(dir4);
+
+for (i = 0; i < nSlices; i++) {
+	name = getMetadata("Label");
+	well = substring(name, 1,5);
+	Property.setSliceLabel(well, i+1);
+	run("Next Slice [>]");
+}	
+
+//find center of mass
+run("Center Of Mass", "image_type=Fluo threshold_method=Otsu width=256 height=256 offset_x=0 offset_y=0 calculation=slice-by-slice");
+run("Clear Results");
+
+
+//measure center of mass
+run("Set Measurements...", "area mean min center display redirect=None decimal=0");
+roiManager("Measure");
+
+for (i=0; i < nResults(); i++){
+Label = getResultLabel(i);
+labelArray = split (Label, ":");
+setResult("Label", i, labelArray[2]);
+}
+
+outputDir = savedir+name2+".xlsx";
+run("Read and Write Excel", "no_count_column file=["+outputDir+"] sheet=Glom dataset_label=[t48]");
+
+//create column for Ratios
+Table.create("Results");
+run("Read and Write Excel", "no_count_column file=["+outputDir+"] sheet=Glom dataset_label=[Ratios]");
+close("Results");
+
+if (isOpen("ROI Manager")) {
+selectWindow("ROI Manager");
+run("Close");
+}
+close("*");
+
+
+if (isOpen("Results")) {
+selectWindow("Results"); 
+run("Close");
+}
+if (isOpen("ROI Manager")) {
+selectWindow("ROI Manager");
+run("Close");
+}
+if (isOpen("Log")) {
+selectWindow("Log");
+run("Close");
+}
