@@ -1,3 +1,5 @@
+//before start: Install ResultstoExcel plugin
+
 setBatchMode(true);
 //definitions
 run("Select None");
